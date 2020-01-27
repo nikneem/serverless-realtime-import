@@ -6,6 +6,7 @@ using HexMaster.Import;
 using HexMaster.Import.DataTransferObjects;
 using HexMaster.Import.Models;
 using Microsoft.Azure.WebJobs;
+using Microsoft.Azure.WebJobs.Extensions.SignalRService;
 using Microsoft.Azure.WebJobs.Host;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualBasic;
@@ -21,6 +22,7 @@ namespace HexMaster.Serverless.Functions
         public static async Task Run(
             [BlobTrigger(BlobContainers.ImportFolder + "/{name}")]CloudBlockBlob blob,
             [Table(TableNames.Users)] CloudTable userTable,
+            [SignalR(HubName = SignalRHubNames.ImportHub)] IAsyncCollector<SignalRMessage> signalRMessages,
             string name, 
             ILogger log)
         {
@@ -37,7 +39,7 @@ namespace HexMaster.Serverless.Functions
                 log.LogError(ex, "Failed to import file, unknown file format");
             }
 
-
+            int totalSucceeded = 0;
             try
             {
                 log.LogInformation($"Importing {importObjects.Count} objects");
@@ -66,13 +68,29 @@ namespace HexMaster.Serverless.Functions
                     {
                         await userTable.ExecuteBatchAsync(batch);
                         batch = new TableBatchOperation();
+                        totalSucceeded += 100;
                     }
                 }
 
                 if (batch.Count > 0)
                 {
                     await userTable.ExecuteBatchAsync(batch);
+                    totalSucceeded += batch.Count;
                 }
+
+                var notificationMessage = new ImportResultDto
+                {
+                    TotalSucceeded = totalSucceeded,
+                    TotalFailed = 0
+                };
+
+                await signalRMessages.AddAsync(
+                    new SignalRMessage
+                    {
+                        Target = "importCompleteSummary",
+                        Arguments = new object[] { notificationMessage }
+                    });
+
             }
             catch (Exception ex)
             {

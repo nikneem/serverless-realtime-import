@@ -1,15 +1,14 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading.Tasks;
 using HexMaster.Import;
+using HexMaster.Import.Commands;
 using HexMaster.Import.DataTransferObjects;
+using HexMaster.Import.Entities;
 using HexMaster.Import.Models;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.SignalRService;
-using Microsoft.Azure.WebJobs.Host;
 using Microsoft.Extensions.Logging;
-using Microsoft.VisualBasic;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
 using Newtonsoft.Json;
@@ -20,85 +19,124 @@ namespace HexMaster.Serverless.Functions
     {
         [FunctionName("ImportFunctions")]
         public static async Task Run(
-            [BlobTrigger(BlobContainers.ImportFolder + "/{name}")]CloudBlockBlob blob,
-            [Table(TableNames.Users)] CloudTable userTable,
-            [SignalR(HubName = SignalRHubNames.ImportHub)] IAsyncCollector<SignalRMessage> signalRMessages,
-            string name, 
+            [BlobTrigger(BlobContainers.ImportFolder + "/{name}")]
+            CloudBlockBlob blob,
+            [Queue(QueueNames.StatusCreate)] IAsyncCollector<CreateImportStatusCommand> statusCommandsQueue,
+            [Queue(QueueNames.ImportValidation)]
+            IAsyncCollector<ImportEntityCommand<UserImportModelDto>> validationQueue,
+            string name,
             ILogger log)
         {
             log.LogInformation($"File {name} was found, trying to import it...");
 
-            List<UserImportModelDto> importObjects = null;
             try
             {
                 var blobTextContent = await blob.DownloadTextAsync();
-                importObjects = JsonConvert.DeserializeObject<List<UserImportModelDto>>(blobTextContent);
+                var importObjects = JsonConvert.DeserializeObject<List<UserImportModelDto>>(blobTextContent);
+
+                var correlationId = Guid.NewGuid();
+
+                await statusCommandsQueue.AddAsync(new CreateImportStatusCommand
+                {
+                    CorrelationId = correlationId,
+                    TotalImportEntries = importObjects.Count
+                });
+                foreach (var user in importObjects)
+                {
+                    var importEntity = new ImportEntityCommand<UserImportModelDto>(correlationId, user);
+                    await validationQueue.AddAsync(importEntity);
+                }
             }
             catch (Exception ex)
             {
+                await statusCommandsQueue.AddAsync(new CreateImportStatusCommand
+                {
+                    CorrelationId = Guid.NewGuid(),
+                    TotalImportEntries = 0,
+                    ErrorMessage = "The file could not be processed. No import was done."
+                });
                 log.LogError(ex, "Failed to import file, unknown file format");
             }
 
-            int totalSucceeded = 0;
+            await blob.DeleteIfExistsAsync();
+        }
+
+
+        [FunctionName("ImportEntityCommandHandler")]
+        public static async Task ImportEntityCommandHandler(
+            [QueueTrigger(QueueNames.ImportSuccess)]
+            ImportEntityCommand<UserImportModelDto> importEntity,
+            [Queue(QueueNames.StatusUpdate)] IAsyncCollector<UpdateImportStatusCommand> statusUpdateQueue,
+            [Queue(QueueNames.ImportFailed)] IAsyncCollector<ErrorEntityCommand<UserImportModelDto>> failedQueue,
+            [Table(TableNames.Users)] CloudTable usersTable,
+            ILogger log)
+        {
             try
             {
-                log.LogInformation($"Importing {importObjects.Count} objects");
-                var batch = new TableBatchOperation();
-                foreach (var user in importObjects)
+                var entity = new UserEntity
                 {
-                    var userEntity = new UserEntity
-                    {
-                        PartitionKey = PartitionKeys.Users,
-                        RowKey = user.Id.ToString(),
-                        Phone = user.Phone,
-                        Address = user.Address,
-                        Age = user.Age,
-                        Email = user.Email,
-                        EyeColor = user.EyeColor,
-                        FavoriteFruit = user.FavoriteFruit,
-                        Gender = user.Gender,
-                        Greeting = user.Greeting,
-                        IsActive = user.IsActive,
-                        Name = user.Name,
-                        Timestamp = DateTimeOffset.UtcNow,
-                        ETag = "*"
-                    };
-                    batch.Add(TableOperation.InsertOrReplace(userEntity));
-                    if (batch.Count == 100)
-                    {
-                        await userTable.ExecuteBatchAsync(batch);
-                        batch = new TableBatchOperation();
-                        totalSucceeded += 100;
-                    }
-                }
-
-                if (batch.Count > 0)
-                {
-                    await userTable.ExecuteBatchAsync(batch);
-                    totalSucceeded += batch.Count;
-                }
-
-                var notificationMessage = new ImportResultDto
-                {
-                    TotalSucceeded = totalSucceeded,
-                    TotalFailed = 0
+                    PartitionKey = PartitionKeys.Users,
+                    RowKey = importEntity.Entity.Id.ToString(),
+                    Age = importEntity.Entity.Age,
+                    Name = importEntity.Entity.Name,
+                    Address = importEntity.Entity.Address,
+                    Email = importEntity.Entity.Email,
+                    EyeColor = importEntity.Entity.EyeColor,
+                    FavoriteFruit = importEntity.Entity.FavoriteFruit,
+                    Gender = importEntity.Entity.Gender,
+                    Greeting = importEntity.Entity.Greeting,
+                    IsActive = importEntity.Entity.IsActive,
+                    Phone = importEntity.Entity.Phone,
+                    Timestamp = DateTimeOffset.UtcNow,
+                    ETag = "*"
                 };
-
-                await signalRMessages.AddAsync(
-                    new SignalRMessage
+                var operation = TableOperation.InsertOrReplace(entity);
+                await usersTable.ExecuteAsync(operation);
+                await statusUpdateQueue.AddAsync(new UpdateImportStatusCommand
                     {
-                        Target = "importCompleteSummary",
-                        Arguments = new object[] { notificationMessage }
-                    });
-
+                        CorrelationId = importEntity.CorrelationId,
+                        Success = true
+                    }
+                );
             }
             catch (Exception ex)
             {
-                log.LogError(ex, "Failed to import file...");
+                var command =
+                    new ErrorEntityCommand<UserImportModelDto>(importEntity.CorrelationId, importEntity.Entity,
+                        ex.Message);
+
+                await failedQueue.AddAsync(command);
             }
-
-
-            await blob.DeleteIfExistsAsync();
         }
+
+        [FunctionName("FailedEntityCommandHandler")]
+        public static async Task FailedEntityCommandHandler(
+            [QueueTrigger(QueueNames.ImportFailed)]
+            ErrorEntityCommand<UserImportModelDto> errorEntity,
+            [Queue(QueueNames.StatusUpdate)] IAsyncCollector<UpdateImportStatusCommand> statusUpdateQueue,
+            [Table(TableNames.Errors)] CloudTable errorsTable,
+            ILogger log)
+        {
+            var entity = new ErrorEntity
+            {
+                PartitionKey = PartitionKeys.Errors,
+                RowKey = Guid.NewGuid().ToString(),
+                CorrelationId = errorEntity.CorrelationId,
+                ErrorMessage = errorEntity.ErrorMessage,
+                ObjectJson = JsonConvert.SerializeObject(errorEntity.Entity),
+                Timestamp = DateTimeOffset.UtcNow,
+                ETag = "*"
+            };
+            var operation = TableOperation.InsertOrReplace(entity);
+            await errorsTable.ExecuteAsync(operation);
+
+            await statusUpdateQueue.AddAsync(new UpdateImportStatusCommand
+            {
+                CorrelationId = errorEntity.CorrelationId,
+                Success = false
+            });
+        }
+
     }
+
 }

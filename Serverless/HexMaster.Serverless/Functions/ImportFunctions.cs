@@ -7,7 +7,6 @@ using HexMaster.Import.DataTransferObjects;
 using HexMaster.Import.Entities;
 using HexMaster.Import.Models;
 using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.SignalRService;
 using Microsoft.Extensions.Logging;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
@@ -22,6 +21,7 @@ namespace HexMaster.Serverless.Functions
             [BlobTrigger(BlobContainers.ImportFolder + "/{name}")]
             CloudBlockBlob blob,
             [Queue(QueueNames.StatusCreate)] IAsyncCollector<CreateImportStatusCommand> statusCommandsQueue,
+            [Queue(QueueNames.StatusProcessing)] IAsyncCollector<ProcessCorralationCommand> statusProcessCommandsQueue,
             [Queue(QueueNames.ImportValidation)]
             IAsyncCollector<ImportEntityCommand<UserImportModelDto>> validationQueue,
             string name,
@@ -46,6 +46,9 @@ namespace HexMaster.Serverless.Functions
                     var importEntity = new ImportEntityCommand<UserImportModelDto>(correlationId, user);
                     await validationQueue.AddAsync(importEntity);
                 }
+
+                await statusProcessCommandsQueue.AddAsync(new ProcessCorralationCommand
+                    {CorrelationId = correlationId});
             }
             catch (Exception ex)
             {

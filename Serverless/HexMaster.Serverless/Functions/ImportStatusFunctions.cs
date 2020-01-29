@@ -15,9 +15,11 @@ namespace HexMaster.Serverless.Functions
     {
         [FunctionName("CreateNewImportStatus")]
         public static async Task CreateNewImportStatus(
-            [QueueTrigger(QueueNames.StatusCreate)] CreateImportStatusCommand statusCommand,
+            [QueueTrigger(QueueNames.StatusCreate)]
+            CreateImportStatusCommand statusCommand,
             [Table(TableNames.Statusses)] CloudTable statusTable,
-            [SignalR(HubName = SignalRHubNames.ImportHub)] IAsyncCollector<SignalRMessage> signalRMessages,
+            [SignalR(HubName = SignalRHubNames.ImportHub)]
+            IAsyncCollector<SignalRMessage> signalRMessages,
             ILogger log)
         {
             log.LogInformation($"A new import was initiated with Correlation ID {statusCommand.CorrelationId}");
@@ -47,54 +49,155 @@ namespace HexMaster.Serverless.Functions
                 Failed = 0,
                 Succeeded = 0
             };
-            await signalRMessages.AddAsync(new SignalRMessage { Target = "newImport", Arguments = new object[] { importStatusDto } });
+            await signalRMessages.AddAsync(new SignalRMessage
+                {Target = "newImport", Arguments = new object[] {importStatusDto}});
         }
 
         [FunctionName("UpdateImportStatus")]
         public static async Task UpdateImportStatus(
-            [QueueTrigger(QueueNames.StatusUpdate)] UpdateImportStatusCommand statusCommand,
-            [Table(TableNames.Statusses)] CloudTable statusTable,
-            [SignalR(HubName = SignalRHubNames.ImportHub)] IAsyncCollector<SignalRMessage> signalRMessages,
+            [QueueTrigger(QueueNames.StatusUpdate)]
+            UpdateImportStatusCommand statusCommand,
+            [Table(TableNames.StatusProcessings)] CloudTable statusTable,
             ILogger log)
         {
             log.LogInformation($"A new import was initiated with Correlation ID {statusCommand.CorrelationId}");
 
-            var findOperation = TableOperation.Retrieve<ImportStatusEntity>(PartitionKeys.Statusses, statusCommand.CorrelationId.ToString());
-            var result = await statusTable.ExecuteAsync(findOperation);
-            if (result.Result is ImportStatusEntity ent)
+            var statusEntity = new StatusProcessingEntity
             {
-                ent.ETag = "*";
+                PartitionKey = statusCommand.CorrelationId.ToString(),
+                RowKey = Guid.NewGuid().ToString(),
+                Success = statusCommand.Success ? 1 : 0,
+                Failed = statusCommand.Success ? 0 : 1,
+                Timestamp = DateTimeOffset.UtcNow,
+                ETag = "*"
+            };
 
-                if (statusCommand.Success)
+            var op = TableOperation.Insert(statusEntity);
+            await statusTable.ExecuteAsync(op);
+
+
+
+            //var findOperation = TableOperation.Retrieve<ImportStatusEntity>(PartitionKeys.Statusses, statusCommand.CorrelationId.ToString());
+            //var result = await statusTable.ExecuteAsync(findOperation);
+            //if (result.Result is ImportStatusEntity ent)
+            //{
+            //    ent.ETag = "*";
+
+            //    if (statusCommand.Success)
+            //    {
+            //        ent.TotalSucceeded += 1;
+            //    }
+            //    else
+            //    {
+            //        ent.TotalFailed += 1;
+            //    }
+
+            //    if (ent.TotalSucceeded + ent.TotalFailed == ent.TotalEntries)
+            //    {
+            //        ent.CompletedOn = DateTimeOffset.UtcNow;
+            //    }
+
+            //    var importStatusDto = new ImportStatusDto
+            //    {
+            //        CorrelationId = statusCommand.CorrelationId,
+            //        TotalEntries = ent.TotalEntries,
+            //        CompletedOn = ent.CompletedOn,
+            //        ErrorMessage = ent.ErrorMessage,
+            //        StartedOn = ent.CreatedOn,
+            //        Failed = ent.TotalFailed,
+            //        Succeeded = ent.TotalSucceeded
+            //    };
+            //    await signalRMessages.AddAsync(new SignalRMessage { Target = "updateImport", Arguments = new object[] { importStatusDto } });
+
+
+            //    var to = TableOperation.Merge(ent);
+            //    await statusTable.ExecuteAsync(to);
+            //}
+        }
+
+        [FunctionName("ProcessStatusMessages")]
+        public static async Task ProcessStatusMessages(
+            [QueueTrigger(QueueNames.StatusProcessing)]
+            ProcessCorralationCommand correlationCommand,
+            [Queue(QueueNames.StatusProcessing)] IAsyncCollector<ProcessCorralationCommand> statusProcessCommandsQueue,
+            [Table(TableNames.Statusses)] CloudTable statusTable,
+            [Table(TableNames.StatusProcessings)] CloudTable statusProcessingTable,
+            [SignalR(HubName = SignalRHubNames.ImportHub)] IAsyncCollector<SignalRMessage> signalRMessages,
+            ILogger log)
+        {
+            log.LogInformation($"A new import was initiated with Correlation ID {correlationCommand.CorrelationId}");
+
+            var op = TableOperation.Retrieve<ImportStatusEntity>(PartitionKeys.Statusses,
+                correlationCommand.CorrelationId.ToString());
+            var entityResult = await statusTable.ExecuteAsync(op);
+            if (entityResult.Result is ImportStatusEntity entity)
+            {
+                var ownerFilter = TableQuery.GenerateFilterCondition(nameof(StatusProcessingEntity.PartitionKey),
+                    QueryComparisons.Equal, correlationCommand.CorrelationId.ToString());
+
+                var query = new TableQuery<StatusProcessingEntity>().Where(ownerFilter);
+                var ct = new TableContinuationToken();
+                var success = 0;
+                var failed = 0;
+                var removalBatch = new TableBatchOperation();
+                do
                 {
-                    ent.TotalSucceeded += 1;
-                }
-                else
+                    var statusProcessEntries = await statusProcessingTable.ExecuteQuerySegmentedAsync(query, ct);
+                    foreach (var status in statusProcessEntries.Results)
+                    {
+                        removalBatch.Add(TableOperation.Delete(status));
+                        success += status.Success;
+                        failed += status.Failed;
+                        if (removalBatch.Count == 100)
+                        {
+                            await statusProcessingTable.ExecuteBatchAsync(removalBatch);
+                            removalBatch = new TableBatchOperation();
+                        }
+                    }
+
+                    ct = statusProcessEntries.ContinuationToken;
+                } while (ct != null);
+
+                if (removalBatch.Count > 0)
                 {
-                    ent.TotalFailed += 1;
+                    await statusProcessingTable.ExecuteBatchAsync(removalBatch);
                 }
 
-                if (ent.TotalSucceeded + ent.TotalFailed == ent.TotalEntries)
+                entity.TotalSucceeded += success;
+                entity.TotalFailed += failed;
+                if (success > 0 || failed > 0)
                 {
-                    ent.CompletedOn = DateTimeOffset.UtcNow;
+                    entity.LastModificationOn = DateTimeOffset.UtcNow;
                 }
+                if (entity.TotalSucceeded + entity.TotalFailed == entity.TotalEntries)
+                {
+                    entity.CompletedOn = DateTimeOffset.UtcNow;
+                }
+                var runningTime = DateTimeOffset.UtcNow - entity.LastModificationOn;
+                if (!entity.CompletedOn.HasValue  && runningTime.TotalMinutes < 10)
+                {
+                    await statusProcessCommandsQueue.AddAsync(correlationCommand);
+                }
+
+                var updateOperation = TableOperation.Replace(entity);
+                await statusTable.ExecuteAsync(updateOperation);
+
 
                 var importStatusDto = new ImportStatusDto
                 {
-                    CorrelationId = statusCommand.CorrelationId,
-                    TotalEntries = ent.TotalEntries,
-                    CompletedOn = ent.CompletedOn,
-                    ErrorMessage = ent.ErrorMessage,
-                    StartedOn = ent.CreatedOn,
-                    Failed = ent.TotalFailed,
-                    Succeeded = ent.TotalSucceeded
+                    CorrelationId = correlationCommand.CorrelationId,
+                    TotalEntries = entity.TotalEntries,
+                    CompletedOn = entity.CompletedOn,
+                    ErrorMessage = entity.ErrorMessage,
+                    StartedOn = entity.CreatedOn,
+                    Failed = entity.TotalFailed,
+                    Succeeded = entity.TotalSucceeded
                 };
-                await signalRMessages.AddAsync(new SignalRMessage { Target = "updateImport", Arguments = new object[] { importStatusDto } });
+                await signalRMessages.AddAsync(new SignalRMessage
+                    {Target = "updateImport", Arguments = new object[] {importStatusDto}});
 
-
-                var to = TableOperation.Merge(ent);
-                await statusTable.ExecuteAsync(to);
             }
+
         }
 
     }

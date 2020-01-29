@@ -10,6 +10,7 @@ namespace HexMaster.Import
     {
         public const string Users = "users";
         public const string Statusses = "statusses";
+        public const string StatusProcessings = "statussesproc";
         public const string Errors = "errors";
     }
     public class PartitionKeys
@@ -23,6 +24,7 @@ namespace HexMaster.Import
     {
         public const string StatusCreate = "statuscreate";
         public const string StatusUpdate = "statusupdate";
+        public const string StatusProcessing = "statusproc";
         public const string ImportValidation = "validation";
         public const string ImportSuccess = "success";
         public const string ImportFailed = "failed";

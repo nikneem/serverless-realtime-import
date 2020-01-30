@@ -8,21 +8,21 @@ Download the source code and open the solution in Visual Studio .NET 2019 (v 16.
 
 ```json
 {
-    "IsEncrypted": false,
-    "Values": {
-        "AzureWebJobsStorage": "UseDevelopmentStorage=true",
-        "AzureSignalRConnectionString": "/--your-signalr-connectionstring--/",
-        "FUNCTIONS_WORKER_RUNTIME": "dotnet"
-    },
-    "Host": {
-        "LocalHttpPort": 7071,
-        "CORS": "http://localhost:4200",
-        "CORSCredentials": true
-    }
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "AzureSignalRConnectionString": "/--your-signalr-connectionstring--/",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet"
+  },
+  "Host": {
+    "LocalHttpPort": 7071,
+    "CORS": "http://localhost:4200",
+    "CORSCredentials": true
+  }
 }
 ```
 
-Note you need to replace one part with the connection string you copied from Azure. Also note the HOST section. This part is required for the SignalR Service to run properly. You can now run the serverless project.
+Note you need to replace one part with the connection string you copied from Azure. Also note the 'Host' section. This part is required for the SignalR Service to run properly. You can now run the serverless project.
 
 As you can see, the project runs on a local storage account. You can replace this with an online version if you like.
 
@@ -35,7 +35,9 @@ To restore all packages
 ```bash
 npm i
 ```
+
 and to run the project
+
 ```bash
 ng serve -o
 ```

@@ -1,3 +1,15 @@
+.fixed-background {
+    width: 100vw;
+    height: 100vh;
+    position: fixed;
+    z-index: -1;
+    top: 0;
+    left: 0;
+    background-image: url(/assets/functions.png);
+    background-repeat: no-repeat;
+    background-position: center center;
+    opacity: 0.3;
+}
 .imports {
     width: 420px;
     margin: 1rem;

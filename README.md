@@ -27,7 +27,7 @@ Note you need to replace one part with the connection string you copied from Azu
 
 As you can see, the project runs on a local storage account. You can replace this with an online version if you like.
 
-## To run tje Angular project
+## To run the Angular project
 
 Make sure you have Node JS > 10 installed. Download the source code and open
 a console window.

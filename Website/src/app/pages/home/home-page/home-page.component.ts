@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { MessageService } from 'primeng/api';
 import { HubConnection, HubConnectionBuilder } from '@aspnet/signalr';
 import { ImportStatusDto } from 'src/app/shared/models/import-result-dto';
+import { environment } from 'src/environments/environment';
 
 @Component({
     selector: 'app-home-page',
@@ -74,7 +75,7 @@ export class HomePageComponent implements OnInit {
 
     private createConnection() {
         this._hubConnection = new HubConnectionBuilder()
-            .withUrl('http://localhost:7071/api/import')
+            .withUrl(`${environment.backend}/api/import`)
             .build();
     }
 

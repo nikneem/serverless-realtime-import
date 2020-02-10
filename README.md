@@ -1,3 +1,4 @@
+![.github/workflows/azure.yml](https://github.com/nikneem/serverless-realtime-import/workflows/.github/workflows/azure.yml/badge.svg)
 # Getting real-time insights from your Serverless Solutions
 
 This is a demo I'm running on my talk 'Getting real-time insights from your Serverless Solutions' during conferences and software development events. This solution contains two projects, one Azure Functions project and one Angular front-end project.

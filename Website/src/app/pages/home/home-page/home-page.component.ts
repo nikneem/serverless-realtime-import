@@ -12,7 +12,7 @@ import { environment } from 'src/environments/environment';
 export class HomePageComponent implements OnInit {
     private _hubConnection: HubConnection;
 
-    private imports: Array<ImportStatusDto>;
+    imports: Array<ImportStatusDto>;
     // messageReceived = new EventEmitter<Message>();
     // connectionEstablished = new EventEmitter<Boolean>();
 

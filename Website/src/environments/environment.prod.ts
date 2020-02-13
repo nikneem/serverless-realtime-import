@@ -1,4 +1,4 @@
 export const environment = {
-  production: true,
-  backend: 'http://import-serverless.azurewebsites.net'
+    production: true,
+    backend: 'https://import-serverless.azurewebsites.net'
 };

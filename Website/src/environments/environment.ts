@@ -3,8 +3,9 @@
 // The list of file replacements can be found in `angular.json`.
 
 export const environment = {
-  production: false,
-  backend: 'http://localhost:7071'
+    production: false,
+//    backend: 'http://localhost:7071'
+    backend: 'https://import-serverless.azurewebsites.net'
 };
 
 /*

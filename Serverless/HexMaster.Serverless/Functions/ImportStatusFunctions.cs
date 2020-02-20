@@ -7,7 +7,9 @@ using HexMaster.Import.Entities;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.SignalRService;
 using Microsoft.Extensions.Logging;
+using Microsoft.WindowsAzure.Storage.Queue;
 using Microsoft.WindowsAzure.Storage.Table;
+using Newtonsoft.Json;
 
 namespace HexMaster.Serverless.Functions
 {
@@ -15,14 +17,20 @@ namespace HexMaster.Serverless.Functions
     {
         [FunctionName("CreateNewImportStatus")]
         public static async Task CreateNewImportStatus(
-            [QueueTrigger(QueueNames.StatusCreate)]
-            CreateImportStatusCommand statusCommand,
+            [QueueTrigger(QueueNames.StatusCreate)] CreateImportStatusCommand statusCommand,
+            [Queue(QueueNames.StatusProcessing)] IAsyncCollector<ProcessCorralationCommand> statusProcessCommandsQueue,
             [Table(TableNames.Statusses)] CloudTable statusTable,
             [SignalR(HubName = SignalRHubNames.ImportHub)]
             IAsyncCollector<SignalRMessage> signalRMessages,
             ILogger log)
         {
             log.LogInformation($"A new import was initiated with Correlation ID {statusCommand.CorrelationId}");
+
+
+            await statusProcessCommandsQueue.AddAsync(new ProcessCorralationCommand
+            {
+                CorrelationId = statusCommand.CorrelationId
+            });
 
             var entity = new ImportStatusEntity
             {
@@ -55,8 +63,7 @@ namespace HexMaster.Serverless.Functions
 
         [FunctionName("UpdateImportStatus")]
         public static async Task UpdateImportStatus(
-            [QueueTrigger(QueueNames.StatusUpdate)]
-            UpdateImportStatusCommand statusCommand,
+            [QueueTrigger(QueueNames.StatusUpdate)] UpdateImportStatusCommand statusCommand,
             [Table(TableNames.StatusProcessings)] CloudTable statusTable,
             ILogger log)
         {
@@ -74,52 +81,12 @@ namespace HexMaster.Serverless.Functions
 
             var op = TableOperation.Insert(statusEntity);
             await statusTable.ExecuteAsync(op);
-
-
-
-            //var findOperation = TableOperation.Retrieve<ImportStatusEntity>(PartitionKeys.Statusses, statusCommand.CorrelationId.ToString());
-            //var result = await statusTable.ExecuteAsync(findOperation);
-            //if (result.Result is ImportStatusEntity ent)
-            //{
-            //    ent.ETag = "*";
-
-            //    if (statusCommand.Success)
-            //    {
-            //        ent.TotalSucceeded += 1;
-            //    }
-            //    else
-            //    {
-            //        ent.TotalFailed += 1;
-            //    }
-
-            //    if (ent.TotalSucceeded + ent.TotalFailed == ent.TotalEntries)
-            //    {
-            //        ent.CompletedOn = DateTimeOffset.UtcNow;
-            //    }
-
-            //    var importStatusDto = new ImportStatusDto
-            //    {
-            //        CorrelationId = statusCommand.CorrelationId,
-            //        TotalEntries = ent.TotalEntries,
-            //        CompletedOn = ent.CompletedOn,
-            //        ErrorMessage = ent.ErrorMessage,
-            //        StartedOn = ent.CreatedOn,
-            //        Failed = ent.TotalFailed,
-            //        Succeeded = ent.TotalSucceeded
-            //    };
-            //    await signalRMessages.AddAsync(new SignalRMessage { Target = "updateImport", Arguments = new object[] { importStatusDto } });
-
-
-            //    var to = TableOperation.Merge(ent);
-            //    await statusTable.ExecuteAsync(to);
-            //}
         }
 
         [FunctionName("ProcessStatusMessages")]
         public static async Task ProcessStatusMessages(
-            [QueueTrigger(QueueNames.StatusProcessing)]
-            ProcessCorralationCommand correlationCommand,
-            [Queue(QueueNames.StatusProcessing)] IAsyncCollector<ProcessCorralationCommand> statusProcessCommandsQueue,
+            [QueueTrigger(QueueNames.StatusProcessing)] ProcessCorralationCommand correlationCommand,
+            [Queue(QueueNames.StatusProcessing)] CloudQueue statusProcessCommandsQueue,
             [Table(TableNames.Statusses)] CloudTable statusTable,
             [Table(TableNames.StatusProcessings)] CloudTable statusProcessingTable,
             [SignalR(HubName = SignalRHubNames.ImportHub)] IAsyncCollector<SignalRMessage> signalRMessages,
@@ -176,7 +143,12 @@ namespace HexMaster.Serverless.Functions
                 var runningTime = DateTimeOffset.UtcNow - entity.LastModificationOn;
                 if (!entity.CompletedOn.HasValue  && runningTime.TotalMinutes < 10)
                 {
-                    await statusProcessCommandsQueue.AddAsync(correlationCommand);
+                    var cloudQueueMessage = new CloudQueueMessage(JsonConvert.SerializeObject(correlationCommand));
+                    await statusProcessCommandsQueue.AddMessageAsync(
+                        cloudQueueMessage, 
+                        TimeSpan.MaxValue,
+                         TimeSpan.FromMilliseconds(300),
+                        null, null);
                 }
 
                 var updateOperation = TableOperation.Replace(entity);

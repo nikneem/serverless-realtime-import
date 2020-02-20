@@ -83,9 +83,7 @@ export class HomePageComponent implements OnInit {
         this._hubConnection
             .start()
             .then(() => {
-                //                this.connectionIsEstablished = true;
                 console.log('Hub connection started');
-                //                this.connectionEstablished.emit(true);
             })
             .catch(err => {
                 console.log('Error while establishing connection, retrying...');
@@ -105,21 +103,21 @@ export class HomePageComponent implements OnInit {
             }
         });
         this._hubConnection.on('updateImport', (data: ImportStatusDto) => {
-            console.log(`Import status update message came in`);
             const update = this.imports.find(
                 ent => ent.CorrelationId === data.CorrelationId
             );
-
+            console.log(`Update ${update.CorrelationId} - ${update.TotalEntries} - ${update.Succeeded} - ${update.Failed}`);
             if (update) {
                 update.CompletedOn = data.CompletedOn;
                 update.ErrorMessage = data.ErrorMessage;
                 update.Succeeded = data.Succeeded;
                 update.Failed = data.Failed;
                 if (data.TotalEntries > 0) {
-                    update.Progress = Math.round(
+                    const process = Math.round(
                         (100 / data.TotalEntries) *
                             (data.Succeeded + data.Failed)
                     );
+                    update.Progress = process;
                 }
             } else {
                 if (data.TotalEntries > 0) {

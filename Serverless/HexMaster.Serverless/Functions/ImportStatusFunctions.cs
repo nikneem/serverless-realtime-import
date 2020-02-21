@@ -94,8 +94,7 @@ namespace HexMaster.Serverless.Functions
         {
             log.LogInformation($"A new import was initiated with Correlation ID {correlationCommand.CorrelationId}");
 
-            var op = TableOperation.Retrieve<ImportStatusEntity>(PartitionKeys.Statusses,
-                correlationCommand.CorrelationId.ToString());
+            var op = TableOperation.Retrieve<ImportStatusEntity>(PartitionKeys.Statusses, correlationCommand.CorrelationId.ToString());
             var entityResult = await statusTable.ExecuteAsync(op);
             if (entityResult.Result is ImportStatusEntity entity)
             {
@@ -141,32 +140,51 @@ namespace HexMaster.Serverless.Functions
                     entity.CompletedOn = DateTimeOffset.UtcNow;
                 }
                 var runningTime = DateTimeOffset.UtcNow - entity.LastModificationOn;
-                if (!entity.CompletedOn.HasValue  && runningTime.TotalMinutes < 10)
+
+
+                ImportStatusDto importStatusDto = null;
+                try
                 {
-                    var cloudQueueMessage = new CloudQueueMessage(JsonConvert.SerializeObject(correlationCommand));
-                    await statusProcessCommandsQueue.AddMessageAsync(
-                        cloudQueueMessage, 
-                        TimeSpan.MaxValue,
-                         TimeSpan.FromMilliseconds(300),
-                        null, null);
+                    var updateOperation = TableOperation.Replace(entity);
+                    await statusTable.ExecuteAsync(updateOperation);
+
+                    if (!entity.CompletedOn.HasValue && runningTime.TotalMinutes < 10)
+                    {
+                        var cloudQueueMessage = new CloudQueueMessage(JsonConvert.SerializeObject(correlationCommand));
+                        await statusProcessCommandsQueue.AddMessageAsync(
+                            cloudQueueMessage,
+                            TimeSpan.MaxValue,
+                            TimeSpan.FromMilliseconds(600),
+                            null, null);
+                    }
+                    importStatusDto = new ImportStatusDto
+                    {
+                        CorrelationId = correlationCommand.CorrelationId,
+                        TotalEntries = entity.TotalEntries,
+                        CompletedOn = entity.CompletedOn,
+                        ErrorMessage = entity.ErrorMessage,
+                        StartedOn = entity.CreatedOn,
+                        Failed = entity.TotalFailed,
+                        Succeeded = entity.TotalSucceeded
+                    };
+                }
+                catch (Exception ex)
+                {
+                    log.LogCritical("Failed to update import status entry", ex.Message);
+                    importStatusDto = new ImportStatusDto
+                    {
+                        CorrelationId = correlationCommand.CorrelationId,
+                        TotalEntries = entity.TotalEntries,
+                        CompletedOn = DateTimeOffset.UtcNow,
+                        ErrorMessage = ex.Message,
+                        StartedOn = entity.CreatedOn,
+                        Failed = entity.TotalFailed,
+                        Succeeded = entity.TotalSucceeded
+                    };
                 }
 
-                var updateOperation = TableOperation.Replace(entity);
-                await statusTable.ExecuteAsync(updateOperation);
 
-
-                var importStatusDto = new ImportStatusDto
-                {
-                    CorrelationId = correlationCommand.CorrelationId,
-                    TotalEntries = entity.TotalEntries,
-                    CompletedOn = entity.CompletedOn,
-                    ErrorMessage = entity.ErrorMessage,
-                    StartedOn = entity.CreatedOn,
-                    Failed = entity.TotalFailed,
-                    Succeeded = entity.TotalSucceeded
-                };
-                await signalRMessages.AddAsync(new SignalRMessage
-                    {Target = "updateImport", Arguments = new object[] {importStatusDto}});
+                await signalRMessages.AddAsync(new SignalRMessage {Target = "updateImport", Arguments = new object[] {importStatusDto}});
 
             }
 

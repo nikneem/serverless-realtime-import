@@ -106,8 +106,8 @@ export class HomePageComponent implements OnInit {
             const update = this.imports.find(
                 ent => ent.CorrelationId === data.CorrelationId
             );
-            console.log(`Update ${update.CorrelationId} - ${update.TotalEntries} - ${update.Succeeded} - ${update.Failed}`);
             if (update) {
+                console.log(`Update ${update.CorrelationId} - ${update.TotalEntries} - ${update.Succeeded} - ${update.Failed}`);
                 update.CompletedOn = data.CompletedOn;
                 update.ErrorMessage = data.ErrorMessage;
                 update.Succeeded = data.Succeeded;

@@ -1,0 +1,48 @@
+.fixed-background {
+    width: 100vw;
+    height: 100vh;
+    position: fixed;
+    z-index: -1;
+    top: 0;
+    left: 0;
+    background-image: url(/assets/functions.png);
+    background-repeat: no-repeat;
+    background-position: center center;
+    opacity: 0.3;
+}
+.imports {
+    width: 420px;
+    margin: 1rem;
+    display: flex;
+    flex-direction: column;
+    .import {
+        padding: 1rem;
+        background-color: #eee;
+        border-radius: 1rem;
+        margin: 1rem;
+        display: flex;
+        flex-flow: column;
+        .numbers {
+            display: flex;
+            flex-flow: row;
+            .total {
+                background-color: #90caf9;
+                text-align: center;
+                flex: 1 1 33%;
+                padding: 1rem;
+            }
+            .succeeded {
+                background-color: #a5d6a7;
+                text-align: center;
+                flex: 1 1 33%;
+                padding: 1rem;
+            }
+            .failed {
+                background-color: #ffab91;
+                text-align: center;
+                flex: 1 1 33%;
+                padding: 1rem;
+            }
+        }
+    }
+}

@@ -1,7 +1,7 @@
-﻿using System;
-using Microsoft.WindowsAzure.Storage.Table;
+﻿
+using Microsoft.Azure.Cosmos.Table;
 
-namespace HexMaster.Import.Models
+namespace HexMaster.Import.Entities
 {
     public sealed class UserEntity : TableEntity
     {

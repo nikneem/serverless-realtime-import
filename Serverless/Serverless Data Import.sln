@@ -5,8 +5,6 @@ VisualStudioVersion = 16.0.29709.97
 MinimumVisualStudioVersion = 15.0.26124.0
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HexMaster.Serverless", "HexMaster.Serverless\HexMaster.Serverless.csproj", "{7474E82D-671E-434D-8416-1A17DDA4CC5C}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HexMaster.Import", "HexMaster.Import\HexMaster.Import.csproj", "{8296D69D-874B-4069-82A1-1EAE2B3F2B1B}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -29,18 +27,6 @@ Global
 		{7474E82D-671E-434D-8416-1A17DDA4CC5C}.Release|x64.Build.0 = Release|Any CPU
 		{7474E82D-671E-434D-8416-1A17DDA4CC5C}.Release|x86.ActiveCfg = Release|Any CPU
 		{7474E82D-671E-434D-8416-1A17DDA4CC5C}.Release|x86.Build.0 = Release|Any CPU
-		{8296D69D-874B-4069-82A1-1EAE2B3F2B1B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{8296D69D-874B-4069-82A1-1EAE2B3F2B1B}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{8296D69D-874B-4069-82A1-1EAE2B3F2B1B}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{8296D69D-874B-4069-82A1-1EAE2B3F2B1B}.Debug|x64.Build.0 = Debug|Any CPU
-		{8296D69D-874B-4069-82A1-1EAE2B3F2B1B}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{8296D69D-874B-4069-82A1-1EAE2B3F2B1B}.Debug|x86.Build.0 = Debug|Any CPU
-		{8296D69D-874B-4069-82A1-1EAE2B3F2B1B}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{8296D69D-874B-4069-82A1-1EAE2B3F2B1B}.Release|Any CPU.Build.0 = Release|Any CPU
-		{8296D69D-874B-4069-82A1-1EAE2B3F2B1B}.Release|x64.ActiveCfg = Release|Any CPU
-		{8296D69D-874B-4069-82A1-1EAE2B3F2B1B}.Release|x64.Build.0 = Release|Any CPU
-		{8296D69D-874B-4069-82A1-1EAE2B3F2B1B}.Release|x86.ActiveCfg = Release|Any CPU
-		{8296D69D-874B-4069-82A1-1EAE2B3F2B1B}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

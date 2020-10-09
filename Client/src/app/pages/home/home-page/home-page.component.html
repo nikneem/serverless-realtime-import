@@ -1,0 +1,21 @@
+<div class="fixed-background"></div>
+<div class="imports" *ngIf="imports">
+    <div class="import" *ngFor="let import of imports">
+        <div class="started">
+            Import started at {{ import.startedOn | date: 'shortTime' }}
+        </div>
+        <div class="progress">
+            <p-progressBar
+                [value]="import.progress"
+                showValue="false"
+            ></p-progressBar>
+        </div>
+        <div class="numbers">
+            <div class="total">{{ import.totalEntries }}</div>
+            <div class="succeeded">{{ import.succeeded }}</div>
+            <div class="failed">{{ import.failed }}</div>
+        </div>
+        <div class="errormessage">{{ import.errorMessage }}</div>
+    </div>
+</div>
+<p-toast></p-toast>

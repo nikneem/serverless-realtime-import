@@ -19,7 +19,7 @@ namespace HexMaster.Serverless.Functions.Import
             Message message,
             string correlationId,
             [Table(TableNames.User)] CloudTable table,
-            [ServiceBus(TopicNames.Status, Connection = "ServiceBusConnectionString")] IAsyncCollector<Message> statusTopic,
+            [ServiceBus(QueueNames.StatusProcess, Connection = "ServiceBusConnectionString")] IAsyncCollector<Message> statusTopic,
             ILogger log)
         {
             await table.CreateIfNotExistsAsync();
@@ -55,7 +55,7 @@ namespace HexMaster.Serverless.Functions.Import
                 log.LogCritical("Failed to store user ({user}) in persistence store", payload);
             }
 
-            var command = new ImportStatusCommand { SucceededUpdateCount = 1 };
+            var command = new ImportStatusChangedCommand {Succeeded = 1};
             await statusTopic.AddAsync(command.Convert(correlationId));
             await statusTopic.FlushAsync();
 

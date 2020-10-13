@@ -4,7 +4,7 @@
 
 export const environment = {
   production: false,
-  backend: 'http://localhost:7071'
+  backend: 'https://dotnetconf2020demo.azurewebsites.net'
 };
 
 /*

@@ -9,12 +9,14 @@
         public const string Status = "status";
         public const string Error = "error";
         public const string User = "user";
+        public const string StatusProcess = "statusproc";
     }
     public static class PartitionKeys
     {
         public const string Status = "status";
         public const string Errors = "error";
         public const string Users = "user";
+        public const string StatusProcess = "proc";
     }
 
     public static class QueueNames
@@ -23,6 +25,8 @@
         public const string Persistence = "persistencequeue";
         public const string Validation = "validatequeue";
         public const string Status = "statusqueue";
+        public const string StatusProcess = "statusproc";
+        public const string StatusLoop = "statusreportloop";
         public const string StatusMessage = "statusmessagequeue";
     }
 

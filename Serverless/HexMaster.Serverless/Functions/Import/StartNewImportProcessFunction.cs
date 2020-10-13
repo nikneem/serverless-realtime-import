@@ -20,6 +20,7 @@ namespace HexMaster.Serverless.Functions.Import
             CloudBlockBlob blob,
             [ServiceBus(TopicNames.Validation, Connection = "ServiceBusConnectionString")] IAsyncCollector<Message> validationTopic,
             [ServiceBus(TopicNames.Status, Connection = "ServiceBusConnectionString")] IAsyncCollector<Message> statusTopic,
+            [ServiceBus(QueueNames.StatusLoop, Connection = "ServiceBusConnectionString")] IAsyncCollector<Message> statusLoopQueue,
             string name,
             ILogger log)
         {
@@ -27,16 +28,19 @@ namespace HexMaster.Serverless.Functions.Import
 
             try
             {
-                var blobTextContent = await blob.DownloadTextAsync();
+               var blobTextContent = await blob.DownloadTextAsync();
                 var importObjects = JsonConvert.DeserializeObject<List<UserImportModelDto>>(blobTextContent);
 
                 var correlationId = Guid.NewGuid().ToString();
 
                 await SendImportStatusCreateCommand(statusTopic, importObjects.Count, null, correlationId);
+                var statusReport = new ImportStatusReportCommand
+                    { StopReportingAt = DateTimeOffset.UtcNow.AddMinutes(30) };
+                await statusLoopQueue.AddAsync(statusReport.Convert(correlationId, 3));
 
                 foreach (var user in importObjects)
                 {
-                    var message = user.Convert(correlationId);
+                    var message = user.Convert(correlationId, 5);
                     await validationTopic.AddAsync(message);
                 }
             }
@@ -53,6 +57,7 @@ namespace HexMaster.Serverless.Functions.Import
             await statusTopic.FlushAsync();
             await validationTopic.FlushAsync();
             await blob.DeleteIfExistsAsync();
+            await statusLoopQueue.FlushAsync();
         }
 
         private static async Task SendImportStatusCreateCommand(

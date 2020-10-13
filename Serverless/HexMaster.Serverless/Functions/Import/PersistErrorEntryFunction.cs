@@ -19,7 +19,7 @@ namespace HexMaster.Serverless.Functions.Import
             Message message,
             string correlationId,
             [Table(TableNames.Error)] CloudTable table,
-            [ServiceBus(TopicNames.Status, Connection = "ServiceBusConnectionString")] IAsyncCollector<Message> statusTopic,
+            [ServiceBus(QueueNames.StatusProcess, Connection = "ServiceBusConnectionString")] IAsyncCollector<Message> statusTopic,
             ILogger log)
         {
             await table.CreateIfNotExistsAsync();
@@ -47,7 +47,7 @@ namespace HexMaster.Serverless.Functions.Import
                     correlationId);
             }
 
-            var command = new ImportStatusCommand {FailedUpdateCount = 1};
+            var command = new ImportStatusChangedCommand {Failed = 1};
             await statusTopic.AddAsync(command.Convert(correlationId));
             await statusTopic.FlushAsync();
         }

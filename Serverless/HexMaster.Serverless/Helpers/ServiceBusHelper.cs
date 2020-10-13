@@ -8,14 +8,18 @@ namespace HexMaster.Serverless.Helpers
     public static class ServiceBusHelper
     {
 
-        public static Message Convert<T>(this T payload, string correlationId) where T : class
+        public static Message Convert<T>(this T payload, string correlationId, int delay = 0) where T : class
         {
             var messageBody = JsonConvert.SerializeObject(payload);
             var message = new Message(Encoding.UTF8.GetBytes(messageBody))
             {
                 CorrelationId = correlationId,
-                SessionId = Guid.NewGuid().ToString()
+                SessionId = Guid.NewGuid().ToString(),
             };
+            if (delay > 0)
+            {
+                message.ScheduledEnqueueTimeUtc = DateTime.UtcNow.AddSeconds(delay);
+            }
             return message;
         }
 

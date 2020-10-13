@@ -17,11 +17,11 @@ namespace HexMaster.Serverless.Functions.Status
         public static async Task Run(
             [ServiceBusTrigger(QueueNames.Status, Connection = "ServiceBusConnectionString")] Message msg,
             [ServiceBus(QueueNames.StatusMessage, Connection = "ServiceBusConnectionString")] IAsyncCollector<Message> statusMessages,
-            [Table(TableNames.Status, PartitionKeys.Status, "{CorrelationId}")] ImportStatusEntity status,
             [Table(TableNames.Status)] CloudTable table,
             string correlationId,
             ILogger log)
         {
+            await table.CreateIfNotExistsAsync();
 
             if (string.IsNullOrWhiteSpace( correlationId))
             {
@@ -31,8 +31,7 @@ namespace HexMaster.Serverless.Functions.Status
 
             var statusUpdateCommand = msg.Convert<ImportStatusCommand>();
 
-            var mergedStatus = status ??
-                new ImportStatusEntity
+            var mergedStatus = new ImportStatusEntity
                 {
                     PartitionKey = PartitionKeys.Status,
                     RowKey = correlationId,
@@ -47,13 +46,9 @@ namespace HexMaster.Serverless.Functions.Status
             {
                 mergedStatus.TotalEntries = statusUpdateCommand.TotalEntries.Value;
             }
-            mergedStatus.TotalFailed += statusUpdateCommand.FailedUpdateCount.GetValueOrDefault();
-            mergedStatus.TotalSucceeded += statusUpdateCommand.SucceededUpdateCount.GetValueOrDefault();
             mergedStatus.LastModificationOn = DateTimeOffset.UtcNow;
-            if (!mergedStatus.CompletedOn.HasValue && mergedStatus.TotalEntries == mergedStatus.TotalFailed + mergedStatus.TotalSucceeded)
-            {
-                mergedStatus.CompletedOn = DateTimeOffset.UtcNow;
-            }
+            var operation = TableOperation.Insert(mergedStatus);
+            await table.ExecuteAsync(operation);
 
             try
             {
@@ -75,9 +70,6 @@ namespace HexMaster.Serverless.Functions.Status
             }
 
 
-            var operation = TableOperation.InsertOrMerge(mergedStatus);
-            await table.CreateIfNotExistsAsync();
-            await table.ExecuteAsync(operation);
             await statusMessages.FlushAsync();
             log.LogInformation($"C# ServiceBus queue trigger function processed message: {msg}");
         }

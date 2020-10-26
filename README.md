@@ -2,6 +2,9 @@
 
 This is a demo I'm running on my talk 'Getting real-time insights from your Serverless Solutions' during conferences and software development events. This solution contains two projects, one Azure Functions project and one Angular front-end project.
 
+## Warning - This documentation is out-dated
+As of October 26 2020, this documentation should be considered out-dated. In previous versions Storage Queues are used the send messages back end forth. The current implementation uses the Azure Service Bus to do so. I will make sure to update this readme in a later stadium.
+
 ## To run the serverless
 
 Download the source code and open the solution in Visual Studio .NET 2019 (v 16.4.3 or higher, the serverless project runs Azure Fuctions 3.0). Go to your azure portal and create a new SignalR service, make sure the Server Mode is set to Serverless!! Open the properties of your SignalR Service and view the Keys properties. Copy one of the connection strings. Now go back to Visual Studio and create a local settings file (local.settings.json) in the root of your project and add the following:
